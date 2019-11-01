@@ -1,0 +1,13 @@
+{
+  "name": "tsmodel",
+  "version": "1.0.0",
+  "description": "Learning typescript by implementing a model class to query an API.",
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/qs": "^6.5.3",
+    "axios": "^0.19.0",
+    "qs": "^6.9.0",
+    "typescript": "^3.6.4"
+  }
+}
