@@ -228,7 +228,7 @@ export class Query<T extends Model> {
     });
   }
 
-  public async request<Response>(
+  public request<Response>(
     method: Method,
     url: string,
     options?: Partial<AxiosRequestConfig>
@@ -239,20 +239,22 @@ export class Query<T extends Model> {
       ...{ sort: this.formatSort(this.$queryParams.sort) }
     };
 
-    let response = await axios.request<ApiResponse<Response>>({
-      url: url,
-      method: method,
-      params: queryParams,
-      paramsSerializer: (params: any) => {
-        return qs.stringify(params, {
-          arrayFormat: "brackets",
-          skipNulls: true
-        });
-      },
-      headers: this.$headers,
-      ...(options ? options : [])
-    });
-
-    return response.data.data;
+    return axios
+      .request<ApiResponse<Response>>({
+        url: url,
+        method: method,
+        params: queryParams,
+        paramsSerializer: (params: any) => {
+          return qs.stringify(params, {
+            arrayFormat: "brackets",
+            skipNulls: true
+          });
+        },
+        headers: this.$headers,
+        ...(options ? options : [])
+      })
+      .then(response => {
+        return response.data.data;
+      });
   }
 }
