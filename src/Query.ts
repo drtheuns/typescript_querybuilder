@@ -1,4 +1,4 @@
-import { PartialRequired } from "./utils";
+import { RequiredId } from "./utils";
 import axios, { AxiosRequestConfig } from "axios";
 import qs from "qs";
 
@@ -191,9 +191,9 @@ export class Query<T extends Model> {
    * Performs a PATCH call to the model's endpoint (e.g. PATCH /users/id).
    *
    * The `id` field on the model is required to be able to call the correct
-   * endpoint (`PartialRequired`).
+   * endpoint (`RequiredId`).
    */
-  public update(data: PartialRequired<T, "id">): Promise<T> {
+  public update(data: RequiredId<T>): Promise<T> {
     return this.request<T>(Method.PATCH, this.getPath(data.id), { data: data });
   }
 
@@ -203,9 +203,9 @@ export class Query<T extends Model> {
    * Performs a DELETE call to the model's endpoint (e.g. DELETE /users/id).
    *
    * The `id` field on the model is required to be able to call the correct
-   * endpoint (`PartialRequired`).
+   * endpoint (`RequiredId`).
    */
-  public delete(model: PartialRequired<T, "id">): Promise<void> {
+  public delete(model: RequiredId<T>): Promise<void> {
     return this.request<any>(Method.DELETE, this.getPath(model.id));
   }
 
