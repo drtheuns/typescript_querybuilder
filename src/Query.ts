@@ -277,12 +277,7 @@ export class Query<T extends Model> {
 
   protected formatSort(sorts: Sort[]) {
     return sorts.map(sort => {
-      switch (sort.order) {
-        case "asc":
-          return sort.key;
-        case "desc":
-          return "!" + sort.key;
-      }
+      return `${sort.key}.${sort.order}`;
     });
   }
 
