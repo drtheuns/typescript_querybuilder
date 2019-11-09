@@ -1,6 +1,8 @@
-import { RequiredId } from "./utils";
 import axios, { AxiosRequestConfig } from "axios";
 import qs from "qs";
+
+import { RequiredId } from "./types";
+import { FilterBuilder } from "./Filter";
 
 /**
  * A model must have an ID to support update/delete.
@@ -27,11 +29,9 @@ interface Sort {
   order: SortOrder;
 }
 
-type QueryParamObj = { [key: string]: string | string[] };
-
 export interface QueryParams {
-  includes: string[];
-  filters: QueryParamObj;
+  select: string | null;
+  filter: string | null;
   limit: number | null;
   sort: Sort[];
   [key: string]: any; // Escape hatch for the queryParameter function.
@@ -44,10 +44,49 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+/*
+ * The Select is a complex type that expresses a select statement on a model.
+ *
+ * For this select to work properly, all the models must inherit from Model.
+ *
+ * You may either select:
+ *
+ * 1. Everything with '*'
+ * 2. Specific fields that are NOT models themselves.
+ * 3. A related model and its fields using a tuple: ['relation_name', [fields]].
+ *
+ * When selecting specific attributes (point 2) it is not allowed to select an
+ * attribute that has the type of a model itself. For example, with a User model
+ * with attribute `posts: Post[]`, it will not be acceptable to select 'posts'.
+ * Instead, to select anything like 'posts' (a related model), it must be done
+ * using point 3.
+ *
+ * Related selects may be nested. Assuming a model like: User -> Posts -> Comments:
+ *
+ * ```typescript
+ * new Query<User>()
+ *   .select('*', ['posts', ['*', ['comments', ['body']]]]);
+ * ```
+ */
+export type Select<T> = '*' | NonModelKeys<T> | TupleOfRelatedModels<T>;
+
+// Gets all the keys on the type T which extend Model or Model[].
+type ModelKeys<T> = Exclude<{ [K in keyof T]: T[K] extends Model | Model[] ? K : never }[keyof T], undefined>;
+type NonModelKeys<T> = Exclude<keyof T, ModelKeys<T>>;
+
+// GetModelType<Post[]> -> Post
+// GetModelType<Post> -> Post
+type GetModelType<T extends Model | Model[]> = T extends (infer U)[] ? U : T;
+type TupleOfRelatedModels<T> = { [K in ModelKeys<T>]: [K, Select<GetModelType<T[K]>>[]] }[ModelKeys<T>];
+// Circular ref in the Select above requires at least TS3.7
+
+// The Select is only used for guarding against invalid use of the `select`
+// function; however, it really is just the same type as the SimplifiedSelect
+// below but with type checking.
+type SimplifiedSelect = string | [string, SimplifiedSelect[]];
+
 /**
  * Implements the API request builder.
- *
- * The goal of this class is to simplify writing of menial queries against the API.
  */
 export class Query<T extends Model> {
   protected $queryParams: QueryParams;
@@ -60,8 +99,8 @@ export class Query<T extends Model> {
    */
   public constructor(path: string) {
     this.$queryParams = {
-      includes: [],
-      filters: {},
+      select: null,
+      filter: null,
       limit: null,
       sort: []
     };
@@ -72,35 +111,56 @@ export class Query<T extends Model> {
   /* ----------------------- Builder methods -----------------------*/
 
   /**
-   * Add a list of resources that should be included to the request.
+   * Set the filter for the request.
    *
-   * Translates to: /resource?include[]=name1&include[]=name2
+   * ```typescript
+   * new Query<User>()
+   *   .filter((builder) => {
+   *     return builder.where('name', 'John');
+   *   })
+   * ```
    */
-  public include(includes: string[]): this {
-    this.$queryParams.include = [...this.$queryParams.include, ...includes];
+  public filter(callback: (builder: FilterBuilder) => FilterBuilder | void): this {
+    let builder = new FilterBuilder();
+    callback(builder);
+    this.queryParameter("filter", builder.build());
 
     return this;
   }
 
   /**
-   * Add a filter to the request.
+   * Select the fields you want returned from the API.
    *
-   * Translates to: /resource?filters[key]=value
-   * or: /resource?filters[key][]=value&filters[key][]=value2
+   * ```typescript
+   * new Query<User>()
+   *   .select('*', ['posts', '*'])
+   * ```
+   *
+   * If you're getting a type error when selecting something, check that the
+   * field / relationship you're selecting is actually defined on your model.
    */
-  public filter(key: string, value: string | string[]): this {
-    this.$queryParams.filters[key] = value;
+  public select(fields: Select<T>[]): this {
+    this.$queryParams.select = this.buildSelect(<SimplifiedSelect[]>fields);
 
     return this;
   }
 
+  private buildSelect(fields: SimplifiedSelect[]): string {
+    return fields.map((value) => {
+      return typeof value === "string"
+        ? value
+        : `${value[0]}(${this.buildSelect(value[1])})`;
+    }).join(',');
+  }
+
   /**
-   * Add many filters at once. See `filter/2`
+   * Adds a select to the query without validation.
+   *
+   * Prefer the select/1 function because this adds compile time checks if the
+   * right fields are selected.
    */
-  public filters(filters: QueryParamObj) {
-    for (let key in filters) {
-      this.$queryParams.filters[key] = filters[key];
-    }
+  public rawSelect(select: string): this {
+    this.$queryParams.select = select;
 
     return this;
   }
@@ -206,10 +266,8 @@ export class Query<T extends Model> {
    * endpoint (`RequiredId`).
    */
   public delete(model: RequiredId<T>): Promise<void> {
-    return this.request<any>(Method.DELETE, this.getPath(model.id));
+    return this.request<void>(Method.DELETE, this.getPath(model.id));
   }
-
-  /* ----------------------- Impl stuff -----------------------*/
 
   protected getPath(id?: string): string {
     let path = (process.env.API_PATH + this.$path).replace(/\/+$/, "");

@@ -6,6 +6,4 @@ export interface User extends Model {
   email: string;
 }
 
-export class UserService extends GenericApiService<User> {
-  protected path: string = "/users";
-}
+export const UserService = GenericApiService<User>("/users");

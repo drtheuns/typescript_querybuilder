@@ -1,62 +1,35 @@
 import { Query, Model } from "./Query";
-import { PartialRequired } from "./utils";
 
 /**
- * Implement some default API methods
+ * Generates a class that can quickly generate typesafe queries.
  *
- * The business logic of the models should be placed in implementations of this
- * class.
- *
- * ## Usage
- *
- * Create a class that implements this class. Set the path on that model,
- * which is used as the path for the API call.
+ * ## Usage:
  *
  * ```typescript
- * interface User extends Model {
- *   name: string;
- * }
+ * interface User extends Model { name: string }
  *
- * class UserService extends GenericService<User> {
- *   protected path: string = "/users";
- * }
+ * const UserService = GenericApiService<User>("/users");
+ *
+ * UserService.query();
  * ```
  *
- * Now we can query this service.
+ * If you want to add your own methods, simply extend the anonymous class that
+ * is returned by this service:
  *
  * ```typescript
- * let userService = new UserService();
- *
- * let x: Promise<User[]> = userService.list();
- * let y: Promise<User> = userService.get(1);
- *
- * userService.create({name: "John Doe"});
+ * class UserService extends GenericApiService<User>("/users") {
+ *   public myMethod(): void {}
+ * }
  * ```
  */
-export abstract class GenericApiService<T extends Model> {
-  protected path: string = "";
+export function GenericApiService<T extends Model>(apiPath: string) {
+  return class {
+    public static query(): Query<T> {
+      return new Query<T>(this.getPath());
+    }
 
-  public query(): Query<T> {
-    return new Query<T>(this.path);
-  }
-
-  public list(): Promise<T[]> {
-    return this.query().list();
-  }
-
-  public get(id: string): Promise<T> {
-    return this.query().get(id);
-  }
-
-  public create(data: Partial<T>): Promise<T> {
-    return this.query().create(data);
-  }
-
-  public update(data: PartialRequired<T, "id">) {
-    return this.query().update(data);
-  }
-
-  public delete(data: PartialRequired<T, "id">) {
-    return this.query().delete(data);
+    public static getPath(): string {
+      return apiPath;
+    }
   }
 }
